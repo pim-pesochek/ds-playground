@@ -10,6 +10,7 @@ class array {
     uint32_t length;
     public:
     array(uint32_t length): length(length) {
+        assert(length != 0);
         storage = new T[length];
     }
 
@@ -109,7 +110,7 @@ class ArrayStack {
 
     protected:
     virtual void resize() {
-        uint32_t new_size = length + length / 2;
+        uint32_t new_size = std::max(4U, length + length / 2);
         array<T> new_array(new_size);
         for (size_t i = 0; i < length; ++i) {
             new_array[i] = std::move(_array[i]);
@@ -128,7 +129,7 @@ class FastArrayStack : public ArrayStack<T> {
 
     protected:
     void resize() override {
-        uint32_t new_size = this->length + this->length / 2;
+        uint32_t new_size = std::max(4U, this->length + this->length / 2);
         array<T> new_array(new_size);
         std::copy(&this->_array[0], &this->_array[this->length], &new_array[0]);
         // for (size_t i = 0; i < length; ++i) {
@@ -159,6 +160,31 @@ class ArrayQueue {
         ++length;
     }
 
+    template <typename U>
+    void add(size_t i, U&& val) {
+        assert(i <= length);
+
+        if (length + 1 > _array.size()) {
+            resize();
+        }
+
+        if (i < length / 2) {
+            // move elements to the left
+            start_idx = (start_idx == 0 ? _array.size() - 1 : start_idx - 1);
+            for (size_t idx = 0; idx < i; ++idx) {
+                _array[ (start_idx + idx) % _array.size() ] = std::move(_array[ (start_idx + idx + 1) % _array.size() ]);
+            }
+        } else {
+            // move elements to the right
+            for (size_t idx = length; idx > i; --idx) {
+                _array[ (start_idx + idx) % _array.size() ] = std::move(_array[ (start_idx + idx - 1) % _array.size() ]);
+            }
+        }
+
+        _array[ (start_idx + i) % _array.size() ] = std::move(val);
+        ++length;
+    }
+
     T& get(size_t idx) {
         return _array[ (start_idx + idx) % _array.size() ];
     }
@@ -179,7 +205,32 @@ class ArrayQueue {
         start_idx = (start_idx + 1) % _array.size();
         --length;
 
-        if (_array.size() >= 3 * length) {
+        if (_array.size() > 3 * length) {
+            resize();
+        }
+
+        return ret;
+    }
+
+    T remove(size_t i) {
+        assert(i < length);
+
+        T ret(std::move(_array[i]));
+
+        if (i < length / 2) {
+            for (size_t idx = i, count = 0; count < i; --idx, ++count) {
+                _array[ (start_idx + idx) % _array.size() ] = std::move(_array[ (start_idx + idx - 1) % _array.size() ]);
+            }
+            start_idx = (start_idx + 1) % _array.size();
+        } else {
+            for (size_t idx = i; idx < length - 1; ++idx) {
+                _array[ (start_idx + idx) % _array.size() ] = std::move(_array[ (start_idx + idx + 1) % _array.size() ]);
+            }
+        }
+
+        --length;
+
+        if (_array.size() > 3 * length) {
             resize();
         }
 
@@ -188,7 +239,7 @@ class ArrayQueue {
 
     private:
     void resize() {
-        uint32_t new_size = length + length/2;
+        uint32_t new_size = std::max(4U, length + length/2);
         array<T> new_array(new_size);
 
         for (size_t i = 0; i != length; ++i) {
@@ -295,12 +346,41 @@ void test_queue_remove(Queue<T>& queue, size_t count) {
     std::cout << "test_queue_remove > " << T() << std::endl;
 }
 
+template <typename T, template<typename> typename Queue>
+void test_queue_positional_add_remove(Queue<T>& queue) {
+    assert(queue.size() == 0);
+
+    queue.add(0, T{0});
+    queue.add(1, T{1});
+    queue.add(2, T{2});
+
+    queue.add(0, T{3});
+    queue.add(1, T{4});
+
+    assert(queue.get(0).value == 3);
+    assert(queue.get(1).value == 4);
+    assert(queue.get(2).value == 0);
+    assert(queue.get(3).value == 1);
+    assert(queue.get(4).value == 2);
+
+    queue.remove(2);
+    queue.remove(3);
+    queue.remove(2);
+    queue.remove(0);
+    queue.remove(0);
+
+    assert(queue.size() == 0);
+
+    std::cout << "test_queue_positional_add_remove > " << T() << std::endl;
+}
+
 void test_queue() {
     std::cout << "ArrayQueue test" << std::endl;
     ArrayQueue<cnt<3>> queue(4);
 
     test_queue_add(queue, 6);
     test_queue_remove(queue, 6);
+    test_queue_positional_add_remove(queue);
 }
 
 void _main() {
