@@ -59,6 +59,8 @@ class ArrayStack {
     ArrayStack(uint32_t capacity): _array(capacity) {
     }
 
+    virtual ~ArrayStack() {}
+
     uint32_t size() const {
         return length;
     }
@@ -147,7 +149,7 @@ class ArrayQueue {
     uint32_t length{0};
     public:
 
-    ArrayQueue(): array(4) {}
+    ArrayQueue(): _array(4) {}
     ArrayQueue(uint32_t capacity) : _array(capacity) {}
 
     template <typename U>
